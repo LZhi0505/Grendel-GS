@@ -13,23 +13,15 @@ def densification(iteration, scene, gaussians, batched_screenspace_pkg):
         timers.start("densification")
 
         timers.start("densification_update_stats")
-        for radii, visibility_filter, screenspace_mean2D in zip(
-            batched_screenspace_pkg["batched_locally_preprocessed_radii"],
-            batched_screenspace_pkg["batched_locally_preprocessed_visibility_filter"],
-            batched_screenspace_pkg["batched_locally_preprocessed_mean2D"],
-        ):
-            gaussians.max_radii2D[visibility_filter] = torch.max(
-                gaussians.max_radii2D[visibility_filter], radii[visibility_filter]
-            )
+        for radii, visibility_filter, screenspace_mean2D in zip(batched_screenspace_pkg["batched_locally_preprocessed_radii"],
+                                                                batched_screenspace_pkg["batched_locally_preprocessed_visibility_filter"],
+                                                                batched_screenspace_pkg["batched_locally_preprocessed_mean2D"]):
+            gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
             gaussians.add_densification_stats(screenspace_mean2D, visibility_filter)
         timers.stop("densification_update_stats")
 
-        if iteration > args.densify_from_iter and utils.check_update_at_this_iter(
-            iteration, args.bsz, args.densification_interval, 0
-        ):
-            assert (
-                args.stop_update_param == False
-            ), "stop_update_param must be false for densification; because it is a flag for debugging."
+        if iteration > args.densify_from_iter and utils.check_update_at_this_iter(iteration, args.bsz, args.densification_interval, 0):
+            assert args.stop_update_param == False, "stop_update_param must be false for densification; because it is a flag for debugging."
             # utils.print_rank_0("iteration: {}, bsz: {}, update_interval: {}, update_residual: {}".format(iteration, args.bsz, args.densification_interval, 0))
 
             timers.start("densify_and_prune")
@@ -50,39 +42,23 @@ def densification(iteration, scene, gaussians, batched_screenspace_pkg):
                 timers.stop("redistribute_gaussians")
                 num_3dgs_after_redistribute = gaussians.get_xyz.shape[0]
 
-                log_file.write(
-                    "iteration[{},{}) redistribute. Now num of 3dgs before redistribute: {}. Now num of 3dgs after redistribute: {}. \n".format(
-                        iteration,
-                        iteration + args.bsz,
-                        num_3dgs_before_redistribute,
-                        num_3dgs_after_redistribute,
-                    )
-                )
+                log_file.write("iteration[{},{}) redistribute. Now num of 3dgs before redistribute: {}. Now num of 3dgs after redistribute: {}. \n".format(
+                    iteration, iteration + args.bsz, num_3dgs_before_redistribute, num_3dgs_after_redistribute))
 
-            utils.check_memory_usage(
-                log_file, args, iteration, gaussians, before_densification_stop=True
-            )
+            # 检查显存的使用情况
+            utils.check_memory_usage(log_file, args, iteration, gaussians, before_densification_stop=True)
 
             utils.inc_densify_iter()
-
-        if (
-            utils.check_update_at_this_iter(
-                iteration, args.bsz, args.opacity_reset_interval, 0
-            )
-            and iteration + args.bsz <= args.opacity_reset_until_iter
-        ):
+        
+        if utils.check_update_at_this_iter(iteration, args.bsz, args.opacity_reset_interval, 0) and iteration+args.bsz <= args.opacity_reset_until_iter:
             timers.start("reset_opacity")
             gaussians.reset_opacity()
             timers.stop("reset_opacity")
 
         timers.stop("densification")
     else:
-        if iteration > args.densify_from_iter and utils.check_update_at_this_iter(
-            iteration, args.bsz, args.densification_interval, 0
-        ):
-            utils.check_memory_usage(
-                log_file, args, iteration, gaussians, before_densification_stop=False
-            )
+        if iteration > args.densify_from_iter and utils.check_update_at_this_iter(iteration, args.bsz, args.densification_interval, 0):
+            utils.check_memory_usage(log_file, args, iteration, gaussians, before_densification_stop=False)
 
 
 def gsplat_densification(iteration, scene, gaussians, batched_screenspace_pkg):
@@ -98,20 +74,11 @@ def gsplat_densification(iteration, scene, gaussians, batched_screenspace_pkg):
         timers.start("densification_update_stats")
         image_width = batched_screenspace_pkg["image_width"]
         image_height = batched_screenspace_pkg["image_height"]
-        batched_screenspace_mean2D_grad = batched_screenspace_pkg[
-            "batched_locally_preprocessed_mean2D"
-        ].grad
-        for i, (radii, visibility_filter) in enumerate(
-            zip(
-                batched_screenspace_pkg["batched_locally_preprocessed_radii"],
-                batched_screenspace_pkg[
-                    "batched_locally_preprocessed_visibility_filter"
-                ],
-            )
-        ):
-            gaussians.max_radii2D[visibility_filter] = torch.max(
-                gaussians.max_radii2D[visibility_filter], radii[visibility_filter]
-            )
+        batched_screenspace_mean2D_grad = batched_screenspace_pkg["batched_locally_preprocessed_mean2D"].grad
+        for i, (radii, visibility_filter) in enumerate(zip(batched_screenspace_pkg["batched_locally_preprocessed_radii"],
+                                                           batched_screenspace_pkg["batched_locally_preprocessed_visibility_filter"],)
+                                                       ):
+            gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
             gaussians.gsplat_add_densification_stats(
                 batched_screenspace_mean2D_grad[i],
                 visibility_filter,
@@ -120,12 +87,8 @@ def gsplat_densification(iteration, scene, gaussians, batched_screenspace_pkg):
             )
         timers.stop("densification_update_stats")
 
-        if iteration > args.densify_from_iter and utils.check_update_at_this_iter(
-            iteration, args.bsz, args.densification_interval, 0
-        ):
-            assert (
-                args.stop_update_param == False
-            ), "stop_update_param must be false for densification; because it is a flag for debugging."
+        if iteration > args.densify_from_iter and utils.check_update_at_this_iter(iteration, args.bsz, args.densification_interval, 0):
+            assert args.stop_update_param == False, "stop_update_param must be false for densification; because it is a flag for debugging."
             # utils.print_rank_0("iteration: {}, bsz: {}, update_interval: {}, update_residual: {}".format(iteration, args.bsz, args.densification_interval, 0))
 
             timers.start("densify_and_prune")
@@ -146,36 +109,19 @@ def gsplat_densification(iteration, scene, gaussians, batched_screenspace_pkg):
                 timers.stop("redistribute_gaussians")
                 num_3dgs_after_redistribute = gaussians.get_xyz.shape[0]
 
-                log_file.write(
-                    "iteration[{},{}) redistribute. Now num of 3dgs before redistribute: {}. Now num of 3dgs after redistribute: {}. \n".format(
-                        iteration,
-                        iteration + args.bsz,
-                        num_3dgs_before_redistribute,
-                        num_3dgs_after_redistribute,
-                    )
-                )
+                log_file.write("iteration[{},{}) redistribute. Now num of 3dgs before redistribute: {}. Now num of 3dgs after redistribute: {}. \n".format(
+                        iteration, iteration + args.bsz, num_3dgs_before_redistribute, num_3dgs_after_redistribute,) )
 
-            utils.check_memory_usage(
-                log_file, args, iteration, gaussians, before_densification_stop=True
-            )
+            utils.check_memory_usage(log_file, args, iteration, gaussians, before_densification_stop=True)
 
             utils.inc_densify_iter()
 
-        if (
-            utils.check_update_at_this_iter(
-                iteration, args.bsz, args.opacity_reset_interval, 0
-            )
-            and iteration + args.bsz <= args.opacity_reset_until_iter
-        ):
+        if utils.check_update_at_this_iter(iteration, args.bsz, args.opacity_reset_interval, 0) and iteration + args.bsz <= args.opacity_reset_until_iter:
             timers.start("reset_opacity")
             gaussians.reset_opacity()
             timers.stop("reset_opacity")
 
         timers.stop("densification")
     else:
-        if iteration > args.densify_from_iter and utils.check_update_at_this_iter(
-            iteration, args.bsz, args.densification_interval, 0
-        ):
-            utils.check_memory_usage(
-                log_file, args, iteration, gaussians, before_densification_stop=False
-            )
+        if iteration > args.densify_from_iter and utils.check_update_at_this_iter(iteration, args.bsz, args.densification_interval, 0):
+            utils.check_memory_usage(log_file, args, iteration, gaussians, before_densification_stop=False)

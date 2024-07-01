@@ -84,11 +84,7 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
     args = utils.get_args()
     cam_infos = []
     utils.print_rank_0("Loading cameras from disk...")
-    for idx, key in tqdm(
-        enumerate(cam_extrinsics),
-        total=len(cam_extrinsics),
-        disable=(utils.LOCAL_RANK != 0),
-    ):
+    for idx, key in tqdm(enumerate(cam_extrinsics), total=len(cam_extrinsics), disable=(utils.LOCAL_RANK != 0)):
 
         extr = cam_extrinsics[key]
         intr = cam_intrinsics[extr.camera_id]
@@ -115,29 +111,11 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder):
             FovY = focal2fov(focal_length_y, height)
             FovX = focal2fov(focal_length_x, width)
         else:
-            assert (
-                False
-            ), "Colmap camera model not handled: only undistorted datasets (PINHOLE or SIMPLE_PINHOLE cameras) supported!"
+            assert False, "Colmap camera model not handled: only undistorted datasets (PINHOLE or SIMPLE_PINHOLE cameras) supported!"
 
         image_path = os.path.join(images_folder, os.path.basename(extr.name))
         image_name = os.path.basename(image_path).split(".")[0]
-        image = Image.open(
-            image_path
-        )  # this is a lazy load, the image is not loaded yet
-        width, height = image.size
-
-        cam_info = CameraInfo(
-            uid=uid,
-            R=R,
-            T=T,
-            FovY=FovY,
-            FovX=FovX,
-            image=None,
-            image_path=image_path,
-            image_name=image_name,
-            width=width,
-            height=height,
-        )
+        image = Image.open(image_path) # this is a lazy load, the image is not loaded yet
 
         # release memory
         image.close()
@@ -152,9 +130,7 @@ def fetchPly(path):
     vertices = plydata["vertex"]
     positions = np.vstack([vertices["x"], vertices["y"], vertices["z"]]).T
     try:
-        colors = (
-            np.vstack([vertices["red"], vertices["green"], vertices["blue"]]).T / 255.0
-        )
+        colors = np.vstack([vertices["red"], vertices["green"], vertices["blue"]]).T / 255.0
     except:
         colors = np.random.rand(positions.shape[0], positions.shape[1])
     try:
@@ -224,17 +200,18 @@ def readColmapSceneInfo(path, images, eval, llffhold=10):
     txt_path = os.path.join(path, "sparse/0/points3D.txt")
     if not os.path.exists(ply_path):
         if utils.GLOBAL_RANK == 0:
-            print(
-                "Converting point3d.bin to .ply, will happen only the first time you open the scene."
-            )
+            # 当前进程是主进程，读取点云后，使用 torch.distributed.barrier() 同步所有进程
+            print("Converting point3d.bin to .ply, will happen only the first time you open the scene.")
             try:
                 xyz, rgb, _ = read_points3D_binary(bin_path)
             except:
                 xyz, rgb, _ = read_points3D_text(txt_path)
             storePly(ply_path, xyz, rgb)
+            # 进程数>1，则同步所有进程
             if utils.DEFAULT_GROUP.size() > 1:
                 torch.distributed.barrier()
         else:
+            # 当前进程不是主进程,则只同步
             if utils.DEFAULT_GROUP.size() > 1:
                 torch.distributed.barrier()
     try:
@@ -242,25 +219,14 @@ def readColmapSceneInfo(path, images, eval, llffhold=10):
     except:
         pcd = None
 
-    scene_info = SceneInfo(
-        point_cloud=pcd,
-        train_cameras=train_cam_infos,
-        test_cameras=test_cam_infos,
-        nerf_normalization=nerf_normalization,
-        ply_path=ply_path,
-    )
+    scene_info = SceneInfo(point_cloud=pcd,
+                           train_cameras=train_cam_infos,
+                           test_cameras=test_cam_infos,
+                           nerf_normalization=nerf_normalization,
+                           ply_path=ply_path)
     return scene_info
 
-
-def readCamerasFromTransformsCity(
-    path,
-    transformsfile,
-    random_background,
-    white_background,
-    extension=".png",
-    undistorted=False,
-    is_debug=False,
-):
+def readCamerasFromTransformsCity(path, transformsfile, random_background, white_background, extension=".png", undistorted=False, is_debug=False):
     cam_infos = []
     if undistorted:
         print("Undistortion the images!!!")
@@ -307,9 +273,7 @@ def readCamerasFromTransformsCity(
             # get the world-to-camera transform and set R, T
             w2c = np.linalg.inv(c2w)
 
-            R = np.transpose(
-                w2c[:3, :3]
-            )  # R is stored transposed due to 'glm' in CUDA code
+            R = np.transpose(w2c[:3, :3])  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
             image_path = os.path.join(path, cam_name)
@@ -326,18 +290,9 @@ def readCamerasFromTransformsCity(
                 FovX = focal2fov(frame["fl_x"], image.size[0])
 
             cam_infos.append(
-                CameraInfo(
-                    uid=idx,
-                    R=R,
-                    T=T,
-                    FovY=FovY,
-                    FovX=FovX,
-                    image=None,
-                    image_path=image_path,
-                    image_name=image_name,
-                    width=image.size[0],
-                    height=image.size[1],
-                )
+                CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX,
+                           image=image, image_path=image_path, image_name=image_name,
+                           width=image.size[0], height=image.size[1])
             )
 
             # release memory
@@ -367,9 +322,7 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
 
             # get the world-to-camera transform and set R, T
             w2c = np.linalg.inv(c2w)
-            R = np.transpose(
-                w2c[:3, :3]
-            )  # R is stored transposed due to 'glm' in CUDA code
+            R = np.transpose(w2c[:3, :3])  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
             image_path = os.path.join(path, cam_name)
@@ -381,30 +334,19 @@ def readCamerasFromTransforms(path, transformsfile, white_background, extension=
             bg = np.array([1, 1, 1]) if white_background else np.array([0, 0, 0])
 
             norm_data = im_data / 255.0
-            arr = norm_data[:, :, :3] * norm_data[:, :, 3:4] + bg * (
-                1 - norm_data[:, :, 3:4]
-            )
-            image = Image.fromarray(np.array(arr * 255.0, dtype=np.byte), "RGB")
+            arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
+            image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
 
             fovy = focal2fov(fov2focal(fovx, image.size[0]), image.size[1])
             FovY = fovy
             FovX = fovx
 
             cam_infos.append(
-                CameraInfo(
-                    uid=idx,
-                    R=R,
-                    T=T,
-                    FovY=FovY,
-                    FovX=FovX,
-                    image=image,
-                    image_path=image_path,
-                    image_name=image_name,
-                    width=image.size[0],
-                    height=image.size[1],
-                )
+                CameraInfo(uid=idx, R=R, T=T, FovY=FovY, FovX=FovX,
+                           image=image, image_path=image_path, image_name=image_name,
+                           width=image.size[0], height=image.size[1])
             )
-
+            
     return cam_infos
 
 
@@ -443,30 +385,18 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     except:
         pcd = None
 
-    scene_info = SceneInfo(
-        point_cloud=pcd,
-        train_cameras=train_cam_infos,
-        test_cameras=test_cam_infos,
-        nerf_normalization=nerf_normalization,
-        ply_path=ply_path,
-    )
+    scene_info = SceneInfo(point_cloud=pcd,
+                           train_cameras=train_cam_infos,
+                           test_cameras=test_cam_infos,
+                           nerf_normalization=nerf_normalization,
+                           ply_path=ply_path)
     return scene_info
 
-
-def readCityInfo(
-    path,
-    random_background,
-    white_background,
-    extension=".tif",
-    llffhold=8,
-    undistorted=False,
-):
+def readCityInfo(path, random_background, white_background, extension=".tif", llffhold=8, undistorted=False):
 
     train_json_path = os.path.join(path, f"transforms_train.json")
     test_json_path = os.path.join(path, f"transforms_test.json")
-    print(
-        "Reading Training Transforms from {} {}".format(train_json_path, test_json_path)
-    )
+    print("Reading Training Transforms from {} {}".format(train_json_path, test_json_path))
 
     train_cam_infos = readCamerasFromTransformsCity(
         path,
@@ -497,13 +427,11 @@ def readCityInfo(
     else:
         assert False, "No ply file found!"
 
-    scene_info = SceneInfo(
-        point_cloud=pcd,
-        train_cameras=train_cam_infos,
-        test_cameras=test_cam_infos,
-        nerf_normalization=nerf_normalization,
-        ply_path=ply_path,
-    )
+    scene_info = SceneInfo(point_cloud=pcd,
+                           train_cameras=train_cam_infos,
+                           test_cameras=test_cam_infos,
+                           nerf_normalization=nerf_normalization,
+                           ply_path=ply_path)
     return scene_info
 
 

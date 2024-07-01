@@ -41,11 +41,12 @@ if __name__ == "__main__":
     debug_p = DebugParams(parser)
     args = parser.parse_args(sys.argv[1:])
 
-    # Set up distributed training
+    # 设置分布式训练。Set up distributed training
     init_distributed(args)
 
     ## Prepare arguments.
     # Check arguments
+    # 初始化参数
     init_args(args)
 
     args = utils.get_args()
@@ -55,9 +56,7 @@ if __name__ == "__main__":
         os.makedirs(args.log_folder, exist_ok=True)
         os.makedirs(args.model_path, exist_ok=True)
     if utils.WORLD_SIZE > 1:
-        torch.distributed.barrier(
-            group=utils.DEFAULT_GROUP
-        )  # log_folder is created before other ranks start writing log.
+        torch.distributed.barrier(group=utils.DEFAULT_GROUP)    # log_folder is created before other ranks start writing log.
     if utils.GLOBAL_RANK == 0:
         with open(args.log_folder + "/args.json", "w") as f:
             json.dump(vars(args), f)
@@ -66,7 +65,7 @@ if __name__ == "__main__":
     safe_state(args.quiet)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
 
-    # Initialize log file and print all args
+    # 为每张卡初始化log文件，并输出所有配置参数（log文件保存路径与 -m 一致）
     log_file = open(
         args.log_folder
         + "/python_ws="

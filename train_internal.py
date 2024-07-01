@@ -105,7 +105,7 @@ def training(dataset_args, opt_args, pipe_args, args, log_file):
         timers.clear()
         if args.nsys_profile:
             nvtx.range_push(f"iteration[{iteration},{iteration+args.bsz})")
-        # Every 1000 its we increase the levels of SH up to a maximum degree
+        # 每1000代增加SH的层数到最大值。Every 1000 its we increase the levels of SH up to a maximum degree
         if utils.check_update_at_this_iter(iteration, args.bsz, 1000, 0):
             gaussians.oneupSHdegree()
 
@@ -269,6 +269,7 @@ def training(dataset_args, opt_args, pipe_args, args, log_file):
                 end2end_timers.print_time(log_file, iteration + args.bsz)
                 utils.print_rank_0("\n[ITER {}] Saving Gaussians".format(iteration))
                 log_file.write("[ITER {}] Saving Gaussians\n".format(iteration))
+                # 保存高斯模型
                 scene.save(iteration)
 
                 if args.save_strategy_history:
