@@ -49,12 +49,8 @@ def training(dataset_args, opt_args, pipe_args, args, log_file):
         if args.start_checkpoint != "":
             model_params, start_from_this_iteration = utils.load_checkpoint(args)
             gaussians.restore(model_params, opt_args)
-            utils.print_rank_0(
-                "Restored from checkpoint: {}".format(args.start_checkpoint)
-            )
-            log_file.write(
-                "Restored from checkpoint: {}\n".format(args.start_checkpoint)
-            )
+            utils.print_rank_0("Restored from checkpoint: {}".format(args.start_checkpoint))
+            log_file.write("Restored from checkpoint: {}\n".format(args.start_checkpoint))
 
         scene.log_scene_info_to_file(log_file, "Scene Info Before Training")
     utils.check_initial_gpu_memory_usage("after init and before training loop")
@@ -92,37 +88,31 @@ def training(dataset_args, opt_args, pipe_args, args, log_file):
     num_trained_batches = 0
 
     ema_loss_for_log = 0
-    for iteration in range(
-        start_from_this_iteration, opt_args.iterations + 1, args.bsz
-    ):
+    # 迭代步长为 bsz
+    for iteration in range(start_from_this_iteration, opt_args.iterations + 1, args.bsz):
         # Step Initialization
         if iteration // args.bsz % 30 == 0:
+            # 每30 iterations更新一次进度条的loss
             progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}"})
-        progress_bar.update(args.bsz)
-        utils.set_cur_iter(iteration)
-        gaussians.update_learning_rate(iteration)
+        progress_bar.update(args.bsz)   # 每bsz更新一次进度条
+        utils.set_cur_iter(iteration)   # 设置当前迭代次数
+        gaussians.update_learning_rate(iteration)   # 更新学习率
         num_trained_batches += 1
         timers.clear()
         if args.nsys_profile:
             nvtx.range_push(f"iteration[{iteration},{iteration+args.bsz})")
-        # 每1000代增加SH的层数到最大值。Every 1000 its we increase the levels of SH up to a maximum degree
+        # 每1000代增加SH的层数，直到达到最大值。Every 1000 its we increase the levels of SH up to a maximum degree
         if utils.check_update_at_this_iter(iteration, args.bsz, 1000, 0):
             gaussians.oneupSHdegree()
 
         # Prepare data: Pick random Cameras for training
         if args.local_sampling:
-            assert (
-                args.bsz % utils.WORLD_SIZE == 0
-            ), "Batch size should be divisible by the number of GPUs."
+            assert (args.bsz % utils.WORLD_SIZE == 0), "Batch size should be divisible by the number of GPUs."
             batched_cameras_idx = train_dataset.get_batched_cameras_idx(
                 args.bsz // utils.WORLD_SIZE
             )
-            batched_all_cameras_idx = torch.zeros(
-                (utils.WORLD_SIZE, len(batched_cameras_idx)), device="cuda", dtype=int
-            )
-            batched_cameras_idx = torch.tensor(
-                batched_cameras_idx, device="cuda", dtype=int
-            )
+            batched_all_cameras_idx = torch.zeros( (utils.WORLD_SIZE, len(batched_cameras_idx)), device="cuda", dtype=int )
+            batched_cameras_idx = torch.tensor( batched_cameras_idx, device="cuda", dtype=int )
             torch.distributed.all_gather_into_tensor(
                 batched_all_cameras_idx, batched_cameras_idx, group=utils.DEFAULT_GROUP
             )
@@ -240,13 +230,7 @@ def training(dataset_args, opt_args, pipe_args, args, log_file):
             # Evaluation
             end2end_timers.stop()
             training_report(
-                iteration,
-                l1_loss,
-                args.test_iterations,
-                scene,
-                pipe_args,
-                background,
-                args.backend,
+                iteration, l1_loss, args.test_iterations, scene, pipe_args, background
             )
             end2end_timers.start()
 
@@ -332,9 +316,7 @@ def training(dataset_args, opt_args, pipe_args, args, log_file):
 
         # Finish a iteration and clean up
         torch.cuda.synchronize()
-        for (
-            viewpoint_cam
-        ) in batched_cameras:  # Release memory of locally rendered original_image
+        for viewpoint_cam in batched_cameras:   # Release memory of locally rendered original_image
             viewpoint_cam.original_image = None
         if args.nsys_profile:
             nvtx.range_pop()
@@ -352,18 +334,13 @@ def training(dataset_args, opt_args, pipe_args, args, log_file):
     )
     progress_bar.close()
 
-
-def training_report(
-    iteration, l1_loss, testing_iterations, scene: Scene, pipe_args, background, backend
-):
+def training_report(iteration, l1_loss, testing_iterations, scene : Scene, pipe_args, background):
     args = utils.get_args()
     log_file = utils.get_log_file()
     # Report test and samples of training set
     while len(testing_iterations) > 0 and iteration > testing_iterations[0]:
         testing_iterations.pop(0)
-    if len(testing_iterations) > 0 and utils.check_update_at_this_iter(
-        iteration, utils.get_args().bsz, testing_iterations[0], 0
-    ):
+    if len(testing_iterations) > 0 and utils.check_update_at_this_iter(iteration, utils.get_args().bsz, testing_iterations[0], 0):
         testing_iterations.pop(0)
         utils.print_rank_0("\n[ITER {}] Start Testing".format(iteration))
 
@@ -400,9 +377,7 @@ def training_report(
                             device="cuda",
                             dtype=int,
                         )
-                        batched_cameras_idx = torch.tensor(
-                            batched_cameras_idx, device="cuda", dtype=int
-                        )
+                        batched_cameras_idx = torch.tensor( batched_cameras_idx, device="cuda", dtype=int )
                         torch.distributed.all_gather_into_tensor(
                             batched_all_cameras_idx,
                             batched_cameras_idx,
@@ -465,14 +440,10 @@ def training_report(
                             )
 
                         if utils.DEFAULT_GROUP.size() > 1:
-                            torch.distributed.all_reduce(
-                                image, op=dist.ReduceOp.SUM, group=utils.DEFAULT_GROUP
-                            )
+                            torch.distributed.all_reduce(image, op=dist.ReduceOp.SUM, group=utils.DEFAULT_GROUP)
 
                         image = torch.clamp(image, 0.0, 1.0)
-                        gt_image = torch.clamp(
-                            gt_camera.original_image / 255.0, 0.0, 1.0
-                        )
+                        gt_image = torch.clamp(gt_camera.original_image / 255.0, 0.0, 1.0)
 
                         if idx + camera_id < num_cameras + 1:
                             l1_test += l1_loss(image, gt_image).mean().double()
@@ -481,14 +452,10 @@ def training_report(
                 psnr_test /= num_cameras
                 l1_test /= num_cameras
                 utils.print_rank_0(
-                    "\n[ITER {}] Evaluating {}: L1 {} PSNR {}".format(
-                        iteration, config["name"], l1_test, psnr_test
-                    )
+                    "\n[ITER {}] Evaluating {}: L1 {} PSNR {}".format(iteration, config["name"], l1_test, psnr_test)
                 )
                 log_file.write(
-                    "[ITER {}] Evaluating {}: L1 {} PSNR {}\n".format(
-                        iteration, config["name"], l1_test, psnr_test
-                    )
+                    "[ITER {}] Evaluating {}: L1 {} PSNR {}\n".format(iteration, config["name"], l1_test, psnr_test)
                 )
 
         torch.cuda.empty_cache()

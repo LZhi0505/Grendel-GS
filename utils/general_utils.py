@@ -213,7 +213,7 @@ def init_distributed(args):
 
 def one_node_device_count():
     global WORLD_SIZE
-    return min(torch.cuda.device_count(), WORLD_SIZE)
+    return min(torch.cuda.device_count(), WORLD_SIZE)   # torch.cuda.device_count() 来获取当前节点上可用的 GPU 设备数量
 
 
 def get_first_rank_on_cur_node():

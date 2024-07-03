@@ -36,8 +36,8 @@ class Scene:
         self.gaussians = gaussians
         log_file = utils.get_log_file()
 
+        # 1. 如果指定了加载模型的迭代次数，则赋给Scene.loaded_iter
         if load_iteration:
-            # 设置要加载的 指定的迭代次数的 结果
             if load_iteration == -1:
                 self.loaded_iter = searchForMaxIteration(
                     os.path.join(self.model_path, "point_cloud")
@@ -48,7 +48,8 @@ class Scene:
 
         utils.log_cpu_memory_usage("before loading images meta data")
 
-        if os.path.exists( os.path.join(args.source_path, "sparse") ):    # Colmap格式的数据集
+        # 2. 从COLMAP或Blender的输出结果中构建 scene_info（包含 点云、train相机info、test相机info、场景归一化参数、点云文件路径）
+        if os.path.exists(os.path.join(args.source_path, "sparse")):    # Colmap格式的数据集
             scene_info = sceneLoadTypeCallbacks["Colmap"](
                 args.source_path, args.images, args.eval, args.llffhold
             )
@@ -59,12 +60,13 @@ class Scene:
         else:
             raise ValueError("No valid dataset found in the source path. {}".format(os.path.join(args.source_path)))
 
-        # 未加载模型，则：
-        # 1. 将点云文件point3D.ply文件复制到input.ply文件
-        # 2. 将相机参数写入cameras.json文件
         if not self.loaded_iter:
+            # 未加载模型，则：
+            # (1) 将点云文件point3D.ply文件复制到input.ply文件
             with open(scene_info.ply_path, 'rb') as src_file, open(os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:
                 dest_file.write(src_file.read())
+
+            # (2) 将相机参数写入cameras.json文件
             json_cams = []
             camlist = []
             if scene_info.test_cameras:
@@ -76,8 +78,8 @@ class Scene:
             with open(os.path.join(self.model_path, "cameras.json"), "w") as file:
                 json.dump(json_cams, file)
 
-        # 随机打乱训练和测试相机
         if shuffle:
+            # 3. 随机打乱train、test相机info
             random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
             random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
 
@@ -85,14 +87,14 @@ class Scene:
 
         self.cameras_extent = scene_info.nerf_normalization["radius"]
 
-        # 将图片的原size设置为全局变量
+        # 4. 将图片的原尺寸设置为全局变量
         orig_w, orig_h = (
             scene_info.train_cameras[0].width,
             scene_info.train_cameras[0].height,
         )
         utils.set_img_size(orig_h, orig_w)
 
-        # 计算数据集的总大小（单位为GB）
+        # 5. 计算数据集的总大小（单位为GB）
         dataset_size_in_GB = (
             1.0
             * (len(scene_info.train_cameras) + len(scene_info.test_cameras))
@@ -110,15 +112,19 @@ class Scene:
             args.local_sampling = False  # TODO: Preloading dataset to GPU is not compatible with local_sampling and distributed_dataset_storage for now. Fix this.
             args.distributed_dataset_storage = False
 
-        # 加载train相机，并使用原始图像分辨率进行训练
+        # 6. 加载train相机
+        # 6.1 根据预设的训练相机个数 划分出要进行训练的相机info
         utils.print_rank_0("Decoding Training Cameras")
         self.train_cameras = None
         self.test_cameras = None
-        if args.num_train_cameras >= 0: # 预设了训练相机个数的上限，则仅加载预设数量的训练相机
+        if args.num_train_cameras >= 0:
+            # 预设了训练相机个数的上限，则仅加载预设数量的训练相机
             train_cameras = scene_info.train_cameras[: args.num_train_cameras]
-        else:   # 未预设上限，则加载全部的
+        else:
+            # 未预设上限，则加载全部的
             train_cameras = scene_info.train_cameras
 
+        # 6.2 使用原图像分辨率，根据训练相机info创建训练相机
         self.train_cameras = cameraList_from_camInfos(train_cameras, args)
 
         # 打印训练相机的个数 和 图像尺寸到log文件中
@@ -128,7 +134,7 @@ class Scene:
                 "Image size: {}x{}\n".format(self.train_cameras[0].image_height, self.train_cameras[0].image_width,)
             )
 
-        # 加载test相机
+        # 7. 加载test相机
         if args.eval:
             utils.print_rank_0("Decoding Test Cameras")
             if args.num_test_cameras >= 0:
@@ -145,7 +151,7 @@ class Scene:
                     "Image size: {}x{}\n".format(self.test_cameras[0].image_height, self.test_cameras[0].image_width,)
                 )
 
-        # 检查GPU显存 和 CPU内存的 初始使用情况
+        # 8. 检查GPU显存 和 CPU内存的 初始使用情况
         utils.check_initial_gpu_memory_usage("after Loading all images")
         utils.log_cpu_memory_usage("after decoding images")
 

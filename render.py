@@ -94,48 +94,32 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         )
         batched_image, _ = render_final(batched_screenspace_pkg, batched_strategies)
 
-        for camera_id, (image, gt_camera) in enumerate(
-            zip(batched_image, batched_cameras)
-        ):
+        for camera_id, (image, gt_camera) in enumerate(zip(batched_image, batched_cameras)):
             actual_idx = idx + camera_id
-            if args.sample_freq != -1 and actual_idx % args.sample_freq != 0:
+            if args.sample_freq != -1 and actual_idx % args.sample_freq != 0:   # 每sample_freq张仅渲染一张图片
                 continue
-            if generated_cnt == args.generate_num:
+            if generated_cnt == args.generate_num:  # 最多渲染 generate_num 张图片
                 break
-            if os.path.exists(
-                os.path.join(render_path, "{0:05d}".format(actual_idx) + ".png")
-            ):
+            if os.path.exists(os.path.join(render_path, "{0:05d}".format(actual_idx) + ".png")):  # 如果已经渲染过，则跳过
                 continue
-            if args.l != -1 and args.r != -1:
+            if args.l != -1 and args.r != -1:   # 仅渲染idx在 [l, r) 的图片
                 if actual_idx < args.l or actual_idx >= args.r:
                     continue
 
             generated_cnt += 1
 
-            if (
-                image is None or len(image.shape) == 0
-            ):  # The image is not rendered locally.
-                image = torch.zeros(
-                    gt_camera.original_image.shape, device="cuda", dtype=torch.float32
-                )
+            if (image is None or len(image.shape) == 0):  # The image is not rendered locally.
+                image = torch.zeros(gt_camera.original_image.shape, device="cuda", dtype=torch.float32)
 
             if utils.DEFAULT_GROUP.size() > 1:
-                torch.distributed.all_reduce(
-                    image, op=dist.ReduceOp.SUM, group=utils.DEFAULT_GROUP
-                )
+                torch.distributed.all_reduce(image, op=dist.ReduceOp.SUM, group=utils.DEFAULT_GROUP)
 
             image = torch.clamp(image, 0.0, 1.0)
             gt_image = torch.clamp(gt_camera.original_image / 255.0, 0.0, 1.0)
 
             if utils.GLOBAL_RANK == 0:
-                torchvision.utils.save_image(
-                    image,
-                    os.path.join(render_path, "{0:05d}".format(actual_idx) + ".png"),
-                )
-                torchvision.utils.save_image(
-                    gt_image,
-                    os.path.join(gts_path, "{0:05d}".format(actual_idx) + ".png"),
-                )
+                torchvision.utils.save_image(image, os.path.join(render_path, "{0:05d}".format(actual_idx) + ".png"),)
+                torchvision.utils.save_image(gt_image, os.path.join(gts_path, "{0:05d}".format(actual_idx) + ".png"),)
 
             gt_camera.original_image = None
 
@@ -159,10 +143,7 @@ def render_sets(
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
         if not skip_train:
-            render_set(
-                dataset.model_path,
-                "train",
-                scene.loaded_iter,
+            render_set(dataset.model_path, "train", scene.loaded_iter,
                 scene.getTrainCameras(),
                 gaussians,
                 pipeline,

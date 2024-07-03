@@ -102,11 +102,7 @@ def decompressed_images_from_camInfos_multiprocess(cam_infos, args):
         # Map load_camera_data to the tasks
         # results = pool.map(load_decompressed_image, tasks)
         results = list(
-            tqdm(
-                pool.imap(load_decompressed_image, tasks),
-                total=total_cameras,
-                disable=(utils.LOCAL_RANK != 0),
-            )
+            tqdm(pool.imap(load_decompressed_image, tasks), total=total_cameras, disable=(utils.LOCAL_RANK != 0),)
         )
 
         for id, result in enumerate(results):
@@ -208,8 +204,12 @@ def decompressed_images_from_camInfos_multiprocess_sharedmem(
 
 
 def cameraList_from_camInfos(cam_infos, args):
+    """
+        cam_infos:  train或test相机info列表
+    """
     args = get_args()
 
+    # 使用多线程加速读取图片
     if args.multiprocesses_image_loading:
         decompressed_images = decompressed_images_from_camInfos_multiprocess(
             cam_infos, args
