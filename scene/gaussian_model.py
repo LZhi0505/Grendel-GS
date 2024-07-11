@@ -497,6 +497,25 @@ class GaussianModel:
 
         self.active_sh_degree = self.max_sh_degree
 
+        print("加载多个ply，开始保存为一个ply...")
+        save_path = folder + "/point_cloud.ply"
+        xyz = catted_xyz
+        normals = np.zeros_like(xyz)
+        f_dc = catted_features_dc.reshape(catted_features_dc.shape[0], -1)  # N 3
+        f_rest = catted_features_rest.reshape(catted_features_rest.shape[0], -1)    # N 45
+        opacities = catted_opacity
+        scale = catted_scaling
+        rotation = catted_rotation
+
+        dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
+
+        elements = np.empty(xyz.shape[0], dtype=dtype_full)
+        attributes = np.concatenate((xyz, normals, f_dc, f_rest, opacities, scale, rotation), axis=1)
+        elements[:] = list(map(tuple, attributes))
+        el = PlyElement.describe(elements, 'vertex')
+        PlyData([el]).write(save_path)
+        print("已保存为一个ply到 {}".format(save_path))
+
     def load_raw_ply(self, path):
         print("Loading ", path)
         plydata = PlyData.read(path)
