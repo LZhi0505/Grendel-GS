@@ -162,12 +162,12 @@ class DistributionParams(ParamGroup):
 
 class BenchmarkParams(ParamGroup):
     def __init__(self, parser):
-        self.enable_timer = False  # Log running time from python side.
-        self.end2end_time = True  # Log end2end training time.
-        self.zhx_time = False  # Log running time from gpu side.
-        self.check_gpu_memory = False  # check gpu memory usage.
-        self.check_cpu_memory = False  # check cpu memory usage.
-        self.log_memory_summary = False
+        self.enable_timer = True # Log running time from python side.
+        self.end2end_time = True # Log end2end training time.
+        self.zhx_time = False # Log running time from gpu side.
+        self.check_gpu_memory = True # check gpu memory usage.
+        self.check_cpu_memory = True # check cpu memory usage.
+        self.log_memory_summary = True
 
         super().__init__(parser, "Benchmark Parameters")
 
@@ -234,9 +234,7 @@ def print_all_args(args, log_file):
 
     # Make sure block size match between python and cuda code.
     # 16, 16, 256
-    cuda_block_x, cuda_block_y, one_dim_block_size = (
-        diff_gaussian_rasterization._C.get_block_XY()
-    )
+    cuda_block_x, cuda_block_y, one_dim_block_size = diff_gaussian_rasterization._C.get_block_XY()
     utils.set_block_size(cuda_block_x, cuda_block_y, one_dim_block_size)
     log_file.write("cuda_block_x: {}; cuda_block_y: {}; one_dim_block_size: {};\n".format(cuda_block_x, cuda_block_y, one_dim_block_size))
 
