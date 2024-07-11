@@ -67,31 +67,16 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     strategy_history = DivisionStrategyHistoryFinal(
         dataset, utils.DEFAULT_GROUP.size(), utils.DEFAULT_GROUP.rank()
     )
-    progress_bar = tqdm(
-        range(1, num_cameras + 1),
-        desc="Rendering progress",
-        disable=(utils.LOCAL_RANK != 0),
-    )
+    progress_bar = tqdm(range(1, num_cameras + 1), desc="Rendering progress", disable=(utils.LOCAL_RANK != 0), )
     for idx in range(1, num_cameras + 1, args.bsz):
         progress_bar.update(args.bsz)
 
         num_camera_to_load = min(args.bsz, num_cameras - idx + 1)
         batched_cameras = dataset.get_batched_cameras(num_camera_to_load)
-        batched_strategies, gpuid2tasks = start_strategy_final(
-            batched_cameras, strategy_history
-        )
-        load_camera_from_cpu_to_all_gpu_for_eval(
-            batched_cameras, batched_strategies, gpuid2tasks
-        )
+        batched_strategies, gpuid2tasks = start_strategy_final(batched_cameras, strategy_history)
+        load_camera_from_cpu_to_all_gpu_for_eval(batched_cameras, batched_strategies, gpuid2tasks)
 
-        batched_screenspace_pkg = distributed_preprocess3dgs_and_all2all_final(
-            batched_cameras,
-            gaussians,
-            pipeline,
-            background,
-            batched_strategies=batched_strategies,
-            mode="test",
-        )
+        batched_screenspace_pkg = distributed_preprocess3dgs_and_all2all_final(batched_cameras, gaussians, pipeline, background, batched_strategies=batched_strategies, mode="test", )
         batched_image, _ = render_final(batched_screenspace_pkg, batched_strategies)
 
         for camera_id, (image, gt_camera) in enumerate(zip(batched_image, batched_cameras)):
@@ -127,13 +112,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             break
 
 
-def render_sets(
-    dataset: ModelParams,
-    iteration: int,
-    pipeline: PipelineParams,
-    skip_train: bool,
-    skip_test: bool,
-):
+def render_sets(dataset: ModelParams, iteration: int, pipeline: PipelineParams, skip_train: bool, skip_test: bool,):
     with torch.no_grad():
         args = utils.get_args()
         gaussians = GaussianModel(dataset.sh_degree)
@@ -143,23 +122,10 @@ def render_sets(
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
 
         if not skip_train:
-            render_set(dataset.model_path, "train", scene.loaded_iter,
-                scene.getTrainCameras(),
-                gaussians,
-                pipeline,
-                background,
-            )
+            render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background, )
 
         if not skip_test:
-            render_set(
-                dataset.model_path,
-                "test",
-                scene.loaded_iter,
-                scene.getTestCameras(),
-                gaussians,
-                pipeline,
-                background,
-            )
+            render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background, )
 
 
 if __name__ == "__main__":
@@ -190,8 +156,7 @@ if __name__ == "__main__":
     log_file = open(
         args.model_path
         + f"/render_ws={utils.DEFAULT_GROUP.size()}_rk_{utils.DEFAULT_GROUP.rank()}.log",
-        "w",
-    )
+        "w", )
     set_log_file(log_file)
 
     ## Prepare arguments.
@@ -211,10 +176,4 @@ if __name__ == "__main__":
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
-    render_sets(
-        lp.extract(args),
-        args.iteration,
-        pp.extract(args),
-        args.skip_train,
-        args.skip_test,
-    )
+    render_sets(lp.extract(args), args.iteration, pp.extract(args), args.skip_train, args.skip_test, )
